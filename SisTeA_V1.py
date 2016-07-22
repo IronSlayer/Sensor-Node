@@ -148,12 +148,12 @@ class SisTeA_App(QtGui.QMainWindow, sistea.Ui_MainWindow, QtGui.QDialog, bladeRF
     def modulation_selection(self):
     	if self.gfsk_radioButton.isChecked() == True:
     	    print "Modulation Selected = GFSK"
-    	    self.rf.set_frequency_rx_final(long(self.rx_freq.value())*1e6)
+    	    #self.rf.set_frequency_rx_final(long(self.rx_freq.value())*1e6)
     	    self.rf.set_mod_selector(1)
             self.rf.set_demod_selector(1)
             self.rf.set_rx_valve_gmsk_value(True)
             self.rf.set_rx_valve_gfsk_value(False)
-            print self.rf.get_frequency_rx_final()
+            #print self.rf.get_frequency_rx_final()
     	elif self.gmsk_radioButton.isChecked() == True:
     	    print "Modulation Selected = GMSK"
     	    #self.rf.set_frequency_rx_final(self.rf.frequency_rx-self.rf.frequency_shift)

@@ -3,9 +3,10 @@
 # GNU Radio Python Flow Graph
 # Title: bladeRF_transceiver
 # Author: Renzo Chan Rios
-# Generated: Thu Jul 21 10:42:37 2016
+# Generated: Fri Jul 22 15:39:45 2016
 ##################################################
 
+from gnuradio import analog
 from gnuradio import blocks
 from gnuradio import digital
 from gnuradio import eng_notation
@@ -31,6 +32,7 @@ class bladeRF_transceiver(gr.top_block):
         ##################################################
         self.symbole_rate = symbole_rate = 10e3
         self.samp_rate = samp_rate = 1e6
+        self.samp_per_sym = samp_per_sym = int(samp_rate / symbole_rate)
         self.rat_interop = rat_interop = 8
         self.rat_decim = rat_decim = 5
         self.frequency_shift = frequency_shift = 520000
@@ -42,8 +44,8 @@ class bladeRF_transceiver(gr.top_block):
         self.tx_valve_gfsk_value = tx_valve_gfsk_value = True
         self.tx_rf_gain = tx_rf_gain = 10
         self.tx_bb_gain = tx_bb_gain = -20
+        self.sensitivity = sensitivity = float((math.pi/2)/samp_per_sym)
         self.samp_per_sym_source = samp_per_sym_source = ((samp_rate/2/firdes_decim)*rat_interop/rat_decim) / symbole_rate
-        self.samp_per_sym = samp_per_sym = int(samp_rate / symbole_rate)
         self.rx_valve_gmsk_value = rx_valve_gmsk_value = False
         self.rx_valve_gfsk_value = rx_valve_gfsk_value = False
         self.rx_rf_gain = rx_rf_gain = 3
@@ -63,14 +65,34 @@ class bladeRF_transceiver(gr.top_block):
         ##################################################
         # Blocks
         ##################################################
+        self.xlating_fir_filter_1_0_0 = filter.freq_xlating_fir_filter_ccc(2, (1, ), frequency_shift, samp_rate)
+        self.xlating_fir_filter_1_0 = filter.freq_xlating_fir_filter_ccc(2, (1, ), frequency_shift, samp_rate)
+        self.xlating_fir_filter_0_0_0 = filter.freq_xlating_fir_filter_ccc(firdes_decim, (firdes_filter), 0, samp_rate/2)
+        self.xlating_fir_filter_0_0 = filter.freq_xlating_fir_filter_ccc(firdes_decim, (firdes_filter), 0, samp_rate/2)
         self.tx_valve_gmsk = grc_blks2.valve(item_size=gr.sizeof_gr_complex*1, open=bool(tx_valve_gmsk_value))
         self.tx_valve_gfsk = grc_blks2.valve(item_size=gr.sizeof_gr_complex*1, open=bool(tx_valve_gfsk_value))
+        self.throttle_0_0 = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate/2,True)
+        self.throttle_0 = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate/2,True)
         self.rx_valve_gmsk = grc_blks2.valve(item_size=gr.sizeof_gr_complex*1, open=bool(rx_valve_gmsk_value))
         self.rx_valve_gfsk = grc_blks2.valve(item_size=gr.sizeof_gr_complex*1, open=bool(rx_valve_gfsk_value))
+        self.rational_resampler_0_0 = filter.rational_resampler_ccc(
+                interpolation=rat_interop,
+                decimation=rat_decim,
+                taps=None,
+                fractional_bw=None,
+        )
+        self.rational_resampler_0 = filter.rational_resampler_ccc(
+                interpolation=rat_interop,
+                decimation=rat_decim,
+                taps=None,
+                fractional_bw=None,
+        )
+        self.quadrature_demod_0 = analog.quadrature_demod_cf(2)
+        self.quadrature_demod = analog.quadrature_demod_cf(1.0/sensitivity)
         self.probe_signal_1 = blocks.probe_signal_f()
-        self.osmosdr_source = osmosdr.source( args="numchan=" + str(1) + " " + "bladerf=0,fpga=/home/pi/hostedx115.rbf" )
+        self.osmosdr_source = osmosdr.source( args="numchan=" + str(1) + " " + "bladerf=0,fpga=/home/pi/hostedx40.rbf" )
         self.osmosdr_source.set_sample_rate(samp_rate)
-        self.osmosdr_source.set_center_freq(frequency_rx, 0)
+        self.osmosdr_source.set_center_freq(frequency_rx_final, 0)
         self.osmosdr_source.set_freq_corr(0, 0)
         self.osmosdr_source.set_dc_offset_mode(0, 0)
         self.osmosdr_source.set_iq_balance_mode(2, 0)
@@ -100,33 +122,16 @@ class bladeRF_transceiver(gr.top_block):
         )
         self.fir_filter_xxx_0 = filter.fir_filter_fff(1, (1, ))
         self.fir_filter_xxx_0.declare_sample_delay(0)
-        self.digital_gmsk_demod_0 = digital.gmsk_demod(
-        	samples_per_symbol=samp_per_sym,
-        	gain_mu=0.175,
-        	mu=0.5,
-        	omega_relative_limit=0.005,
-        	freq_error=0.0,
-        	verbose=False,
-        	log=False,
-        )
         self.digital_gfsk_mod_0 = digital.gfsk_mod(
-        	samples_per_symbol=4,
-        	sensitivity=1.0,
+        	samples_per_symbol=samp_per_sym,
+        	sensitivity=sensitivity,
         	bt=0.5,
         	verbose=False,
         	log=False,
         )
-        self.digital_gfsk_demod_0 = digital.gfsk_demod(
-        	samples_per_symbol=samp_per_sym,
-        	sensitivity=1,
-        	gain_mu=0.175,
-        	mu=0.5,
-        	omega_relative_limit=0.005,
-        	freq_error=0.0,
-        	verbose=False,
-        	log=False,
-        )
         self.correlate_access_code = digital.correlate_access_code_bb(access_code, 4)
+        self.clock_recovery_0 = digital.clock_recovery_mm_ff(samp_per_sym_source*(1+0.0), 0.25*0.175*0.175, 0.5, 0.175, 0.005)
+        self.clock_recovery = digital.clock_recovery_mm_ff(samp_per_sym_source*(1+0.0), 0.25*0.175*0.175, 0.5, 0.175, 0.005)
         self.cc1111_packet_encoder = cc1111.cc1111_packet_mod_base(cc1111.cc1111_packet_encoder(
                         samples_per_symbol=samp_per_sym,
                         bits_per_symbol=bit_per_sym,
@@ -155,30 +160,44 @@ class bladeRF_transceiver(gr.top_block):
         	input_index=mod_selector,
         	output_index=0,
         )
+        self.binary_slicer_0 = digital.binary_slicer_fb()
+        self.binary_slicer = digital.binary_slicer_fb()
 
         ##################################################
         # Connections
         ##################################################
+        self.connect((self.binary_slicer, 0), (self.blks2_selector_0_0, 1))    
+        self.connect((self.binary_slicer_0, 0), (self.blks2_selector_0_0, 0))    
         self.connect((self.blks2_selector_0, 0), (self.osmosdr_sink, 0))    
         self.connect((self.blks2_selector_0_0, 0), (self.correlate_access_code, 0))    
         self.connect((self.blocks_complex_to_mag_squared_0_0, 0), (self.fir_filter_xxx_0, 0))    
         self.connect((self.cc1111_packet_decoder, 0), (self.blocks_null_sink_0, 0))    
         self.connect((self.cc1111_packet_encoder, 0), (self.digital_gfsk_mod_0, 0))    
         self.connect((self.cc1111_packet_encoder, 0), (self.gmsk_mod, 0))    
+        self.connect((self.clock_recovery, 0), (self.binary_slicer, 0))    
+        self.connect((self.clock_recovery_0, 0), (self.binary_slicer_0, 0))    
         self.connect((self.correlate_access_code, 0), (self.cc1111_packet_decoder, 0))    
-        self.connect((self.digital_gfsk_demod_0, 0), (self.blks2_selector_0_0, 1))    
         self.connect((self.digital_gfsk_mod_0, 0), (self.tx_valve_gfsk, 0))    
-        self.connect((self.digital_gmsk_demod_0, 0), (self.blks2_selector_0_0, 0))    
         self.connect((self.fir_filter_xxx_0, 0), (self.nlog10_ff, 0))    
         self.connect((self.gmsk_mod, 0), (self.tx_valve_gmsk, 0))    
         self.connect((self.nlog10_ff, 0), (self.probe_signal_1, 0))    
         self.connect((self.osmosdr_source, 0), (self.blocks_complex_to_mag_squared_0_0, 0))    
         self.connect((self.osmosdr_source, 0), (self.rx_valve_gfsk, 0))    
         self.connect((self.osmosdr_source, 0), (self.rx_valve_gmsk, 0))    
-        self.connect((self.rx_valve_gfsk, 0), (self.digital_gfsk_demod_0, 0))    
-        self.connect((self.rx_valve_gmsk, 0), (self.digital_gmsk_demod_0, 0))    
+        self.connect((self.quadrature_demod, 0), (self.clock_recovery, 0))    
+        self.connect((self.quadrature_demod_0, 0), (self.clock_recovery_0, 0))    
+        self.connect((self.rational_resampler_0, 0), (self.quadrature_demod, 0))    
+        self.connect((self.rational_resampler_0_0, 0), (self.quadrature_demod_0, 0))    
+        self.connect((self.rx_valve_gfsk, 0), (self.xlating_fir_filter_1_0, 0))    
+        self.connect((self.rx_valve_gmsk, 0), (self.xlating_fir_filter_1_0_0, 0))    
+        self.connect((self.throttle_0, 0), (self.xlating_fir_filter_0_0, 0))    
+        self.connect((self.throttle_0_0, 0), (self.xlating_fir_filter_0_0_0, 0))    
         self.connect((self.tx_valve_gfsk, 0), (self.blks2_selector_0, 1))    
         self.connect((self.tx_valve_gmsk, 0), (self.blks2_selector_0, 0))    
+        self.connect((self.xlating_fir_filter_0_0, 0), (self.rational_resampler_0, 0))    
+        self.connect((self.xlating_fir_filter_0_0_0, 0), (self.rational_resampler_0_0, 0))    
+        self.connect((self.xlating_fir_filter_1_0, 0), (self.throttle_0, 0))    
+        self.connect((self.xlating_fir_filter_1_0_0, 0), (self.throttle_0_0, 0))    
 
 
     def get_symbole_rate(self):
@@ -199,6 +218,15 @@ class bladeRF_transceiver(gr.top_block):
         self.set_samp_per_sym_source(((self.samp_rate/2/self.firdes_decim)*self.rat_interop/self.rat_decim) / self.symbole_rate)
         self.osmosdr_sink.set_sample_rate(self.samp_rate)
         self.osmosdr_source.set_sample_rate(self.samp_rate)
+        self.throttle_0.set_sample_rate(self.samp_rate/2)
+        self.throttle_0_0.set_sample_rate(self.samp_rate/2)
+
+    def get_samp_per_sym(self):
+        return self.samp_per_sym
+
+    def set_samp_per_sym(self, samp_per_sym):
+        self.samp_per_sym = samp_per_sym
+        self.set_sensitivity(float((math.pi/2)/self.samp_per_sym))
 
     def get_rat_interop(self):
         return self.rat_interop
@@ -220,6 +248,8 @@ class bladeRF_transceiver(gr.top_block):
     def set_frequency_shift(self, frequency_shift):
         self.frequency_shift = frequency_shift
         self.set_frequency_rx_final(self.frequency_rx-self.frequency_shift)
+        self.xlating_fir_filter_1_0.set_center_freq(self.frequency_shift)
+        self.xlating_fir_filter_1_0_0.set_center_freq(self.frequency_shift)
 
     def get_frequency_rx(self):
         return self.frequency_rx
@@ -227,7 +257,6 @@ class bladeRF_transceiver(gr.top_block):
     def set_frequency_rx(self, frequency_rx):
         self.frequency_rx = frequency_rx
         self.set_frequency_rx_final(self.frequency_rx-self.frequency_shift)
-        self.osmosdr_source.set_center_freq(self.frequency_rx, 0)
 
     def get_firdes_transition_width(self):
         return self.firdes_transition_width
@@ -278,17 +307,20 @@ class bladeRF_transceiver(gr.top_block):
         self.tx_bb_gain = tx_bb_gain
         self.osmosdr_sink.set_bb_gain(self.tx_bb_gain, 0)
 
+    def get_sensitivity(self):
+        return self.sensitivity
+
+    def set_sensitivity(self, sensitivity):
+        self.sensitivity = sensitivity
+        self.quadrature_demod.set_gain(1.0/self.sensitivity)
+
     def get_samp_per_sym_source(self):
         return self.samp_per_sym_source
 
     def set_samp_per_sym_source(self, samp_per_sym_source):
         self.samp_per_sym_source = samp_per_sym_source
-
-    def get_samp_per_sym(self):
-        return self.samp_per_sym
-
-    def set_samp_per_sym(self, samp_per_sym):
-        self.samp_per_sym = samp_per_sym
+        self.clock_recovery.set_omega(self.samp_per_sym_source*(1+0.0))
+        self.clock_recovery_0.set_omega(self.samp_per_sym_source*(1+0.0))
 
     def get_rx_valve_gmsk_value(self):
         return self.rx_valve_gmsk_value
@@ -355,12 +387,15 @@ class bladeRF_transceiver(gr.top_block):
 
     def set_frequency_rx_final(self, frequency_rx_final):
         self.frequency_rx_final = frequency_rx_final
+        self.osmosdr_source.set_center_freq(self.frequency_rx_final, 0)
 
     def get_firdes_filter(self):
         return self.firdes_filter
 
     def set_firdes_filter(self, firdes_filter):
         self.firdes_filter = firdes_filter
+        self.xlating_fir_filter_0_0.set_taps((self.firdes_filter))
+        self.xlating_fir_filter_0_0_0.set_taps((self.firdes_filter))
 
     def get_demod_selector(self):
         return self.demod_selector
